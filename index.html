@@ -26,7 +26,7 @@
 
     <main id="mainView" class="p-4 hide">
         <div id="cardsContainer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pb-20 fade-in">
-        </div>
+            </div>
     </main>
 
     <button id="fabBtn" class="fixed bottom-6 right-6 bg-blue-600 text-white w-14 h-14 rounded-full shadow-lg flex items-center justify-center text-3xl hover:bg-blue-700 transition hide z-40" onclick="toggleForm()">
@@ -61,7 +61,7 @@
                 <div>
                     <label class="block text-sm font-medium text-gray-700">Empresa Responsável</label>
                     <select id="empresa" required class="mt-1 w-full p-2 border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500">
-                    </select>
+                        </select>
                 </div>
 
                 <div>
@@ -93,13 +93,14 @@
     </div>
 
     <script>
-        // === COLE A SUA NOVA URL DO APPS SCRIPT AQUI ===
-        const GAS_URL = "https://script.google.com/macros/s/AKfycbymuxE_pijjqd0FMZyXuBop-GcpA-CSIhsmWCh8Z5QuC2Dc2YdeOTMRAmOzugJ3J-zs/exec";
+        // === COLAR A URL DO SEU GOOGLE APPS SCRIPT AQUI ===
+        const GAS_URL = "COLE_SUA_URL_AQUI";
         
         let desviosGlobais = [];
         let nomesUnicos = new Set();
 
         window.onload = () => {
+            // Setar data de hoje como padrão
             document.getElementById('dataIdentificacao').valueAsDate = new Date();
             carregarDados();
         };
@@ -123,15 +124,17 @@
                 const res = await fetch(GAS_URL);
                 const data = await res.json();
                 
-                desviosGlobais = data.desvios.reverse(); 
+                desviosGlobais = data.desvios.reverse(); // Mais novos primeiro
                 renderCards();
                 
+                // Preencher select de Empresas
                 const selectEmpresa = document.getElementById('empresa');
                 selectEmpresa.innerHTML = '<option value="">Selecione...</option>';
                 data.empresas.forEach(emp => {
                     selectEmpresa.innerHTML += `<option value="${emp}">${emp}</option>`;
                 });
 
+                // Preencher datalist de Nomes
                 const listaNomes = document.getElementById('listaNomes');
                 listaNomes.innerHTML = '';
                 data.desvios.forEach(d => { if(d.identificadoPor) nomesUnicos.add(d.identificadoPor); });
@@ -153,7 +156,7 @@
             container.innerHTML = '';
 
             desviosGlobais.forEach(item => {
-                let colorClass = "bg-white border-gray-200";
+                let colorClass = "bg-white border-gray-200"; // Padrão
                 if (item.status === "Não iniciado") colorClass = "bg-red-50 border-red-300";
                 if (item.status === "Em andamento") colorClass = "bg-yellow-50 border-yellow-300";
                 if (item.status === "Resolvido") colorClass = "bg-green-50 border-green-300";
@@ -190,73 +193,38 @@
                 const payload = { action: "updateStatus", id: id, status: novoStatus };
                 await fetch(GAS_URL, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'text/plain' },
+                    headers: { 'Content-Type': 'text/plain' }, // Evita CORS preflight
                     body: JSON.stringify(payload)
                 });
-                carregarDados();
+                carregarDados(); // Recarrega os dados
             } catch (err) {
                 alert("Erro ao atualizar status");
                 hideLoading();
             }
         }
 
-        // NOVO: Função que redimensiona e comprime a imagem antes de enviar
-        function compressImage(file) {
+        function getBase64(file) {
             return new Promise((resolve, reject) => {
                 if (!file) return resolve(null);
-                
                 const reader = new FileReader();
                 reader.readAsDataURL(file);
-                reader.onload = event => {
-                    const img = new Image();
-                    img.src = event.target.result;
-                    img.onload = () => {
-                        const canvas = document.createElement('canvas');
-                        const ctx = canvas.getContext('2d');
-                        
-                        // Define limite máximo de 800px de altura ou largura
-                        const MAX_WIDTH = 800;
-                        const MAX_HEIGHT = 800;
-                        let width = img.width;
-                        let height = img.height;
-
-                        if (width > height) {
-                            if (width > MAX_WIDTH) {
-                                height *= MAX_WIDTH / width;
-                                width = MAX_WIDTH;
-                            }
-                        } else {
-                            if (height > MAX_HEIGHT) {
-                                width *= MAX_HEIGHT / height;
-                                height = MAX_HEIGHT;
-                            }
-                        }
-
-                        canvas.width = width;
-                        canvas.height = height;
-                        ctx.drawImage(img, 0, 0, width, height);
-                        
-                        // Converte a imagem comprimida para base64 com qualidade 70%
-                        resolve(canvas.toDataURL('image/jpeg', 0.7));
-                    };
-                    img.onerror = error => reject(error);
-                };
+                reader.onload = () => resolve(reader.result);
                 reader.onerror = error => reject(error);
             });
         }
 
         async function submitForm(e) {
             e.preventDefault();
-            showLoading("Preparando imagens e enviando... (Isso pode levar alguns segundos)");
+            showLoading("Gerando relatório e enviando email... (Isso pode levar alguns segundos)");
 
             const file1 = document.getElementById('foto1').files[0];
             const file2 = document.getElementById('foto2').files[0];
 
             try {
-                // Aqui chamamos o compressor de imagens antes do envio
-                const base64Foto1 = await compressImage(file1);
-                const base64Foto2 = await compressImage(file2);
+                const base64Foto1 = await getBase64(file1);
+                const base64Foto2 = await getBase64(file2);
 
+                // Formatando data para DD/MM/YYYY para a planilha
                 const dateRaw = document.getElementById('dataIdentificacao').value;
                 const [year, month, day] = dateRaw.split('-');
                 const dataBr = `${day}/${month}/${year}`;
@@ -273,24 +241,16 @@
                     foto2: base64Foto2
                 };
 
-                const response = await fetch(GAS_URL, {
+                await fetch(GAS_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'text/plain' },
                     body: JSON.stringify(payload)
                 });
 
-                const jsonResponse = await response.json();
-
-                if (!jsonResponse.sucesso) {
-                    alert("Erro do Servidor: " + jsonResponse.erro);
-                    hideLoading();
-                    return;
-                }
-
                 document.getElementById('desvioForm').reset();
                 document.getElementById('dataIdentificacao').valueAsDate = new Date();
                 toggleForm();
-                carregarDados();
+                carregarDados(); // Recarrega para mostrar o novo na home
 
             } catch (err) {
                 console.error(err);
